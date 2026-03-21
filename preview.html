@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToDo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { --bg: #f8f7f4; }
+  body { background: var(--bg); font-family: -apple-system, 'Hiragino Sans', sans-serif; }
+
+  @keyframes taskEnter {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes taskExit {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(16px); }
+  }
+  .task-enter { animation: taskEnter .25s ease-out; }
+  .task-exit  { animation: taskExit  .2s  ease-in forwards; }
+</style>
+</head>
+<body class="min-h-screen flex items-start justify-center pt-16 pb-24 px-4">
+<div class="w-full max-w-lg" id="app">
+
+  <!-- ヘッダー -->
+  <div class="mb-10">
+    <h1 class="text-4xl font-bold tracking-tight text-stone-800">タスク</h1>
+    <p class="mt-1 text-sm text-stone-400" id="subtitle">タスクを追加してみましょう</p>
+  </div>
+
+  <!-- 入力フォーム -->
+  <div class="flex gap-2 mb-6">
+    <input
+      id="taskInput"
+      type="text"
+      placeholder="新しいタスクを入力..."
+      class="flex-1 px-4 py-3 rounded-xl bg-white border border-stone-200 text-stone-800 placeholder:text-stone-300 text-sm outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-200 transition-all"
+    />
+    <button
+      id="addBtn"
+      class="px-5 py-3 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+    >追加</button>
+  </div>
+
+  <!-- フィルター -->
+  <div id="filterBar" class="hidden mb-4 p-1 bg-stone-100 rounded-xl flex gap-1">
+    <button data-f="all"       class="filter-btn flex-1 py-1.5 text-xs font-medium rounded-lg transition-all">すべて</button>
+    <button data-f="active"    class="filter-btn flex-1 py-1.5 text-xs font-medium rounded-lg transition-all">未完了</button>
+    <button data-f="completed" class="filter-btn flex-1 py-1.5 text-xs font-medium rounded-lg transition-all">完了済み</button>
+  </div>
+
+  <!-- タスクリスト -->
+  <div id="taskList" class="space-y-2"></div>
+
+  <!-- まとめて削除 -->
+  <div class="mt-6 flex justify-end">
+    <button id="clearBtn" class="hidden text-xs text-stone-300 hover:text-red-400 transition-colors"></button>
+  </div>
+</div>
+
+<script>
+  let tasks = JSON.parse(localStorage.getItem('todo-tasks') || '[]');
+  let filter = 'all';
+
+  const input    = document.getElementById('taskInput');
+  const addBtn   = document.getElementById('addBtn');
+  const taskList = document.getElementById('taskList');
+  const subtitle = document.getElementById('subtitle');
+  const filterBar= document.getElementById('filterBar');
+  const clearBtn = document.getElementById('clearBtn');
+
+  function save() { localStorage.setItem('todo-tasks', JSON.stringify(tasks)); }
+
+  function updateSubtitle() {
+    const active    = tasks.filter(t => !t.completed).length;
+    const total     = tasks.length;
+    if (total === 0) subtitle.textContent = 'タスクを追加してみましょう';
+    else if (active === 0) subtitle.textContent = 'すべて完了しました！';
+    else subtitle.textContent = `${active} 件残っています`;
+  }
+
+  function updateFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      const active = btn.dataset.f === filter;
+      btn.className = `filter-btn flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+        active ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-400 hover:text-stone-600'
+      }`;
+    });
+  }
+
+  function render() {
+    const filtered = tasks.filter(t => {
+      if (filter === 'active')    return !t.completed;
+      if (filter === 'completed') return  t.completed;
+      return true;
+    });
+    const completedCount = tasks.filter(t => t.completed).length;
+
+    // フィルターバー表示
+    tasks.length > 0
+      ? filterBar.classList.replace('hidden', 'flex')
+      : (filterBar.classList.add('hidden'), filterBar.classList.remove('flex'));
+
+    // まとめて削除ボタン
+    if (completedCount > 0) {
+      clearBtn.textContent = `完了済み ${completedCount} 件を削除`;
+      clearBtn.classList.remove('hidden');
+    } else {
+      clearBtn.classList.add('hidden');
+    }
+
+    // タスクリスト
+    taskList.innerHTML = '';
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'text-center py-12 text-stone-300 text-sm';
+      empty.textContent =
+        filter === 'completed' ? '完了済みのタスクはありません' :
+        filter === 'active'    ? '未完了のタスクはありません' :
+                                 'タスクはありません';
+      taskList.appendChild(empty);
+    } else {
+      filtered.forEach(task => {
+        const row = document.createElement('div');
+        row.id = `task-${task.id}`;
+        row.className = 'group flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border border-stone-100 shadow-sm task-enter';
+
+        // チェックボタン
+        const check = document.createElement('button');
+        check.setAttribute('aria-label', task.completed ? '未完了に戻す' : '完了にする');
+        check.className = `flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+          task.completed
+            ? 'bg-emerald-500 border-emerald-500 text-white'
+            : 'border-stone-200 hover:border-stone-400'
+        }`;
+        check.innerHTML = task.completed
+          ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd"/></svg>`
+          : '';
+        check.onclick = () => toggle(task.id);
+
+        // テキスト
+        const span = document.createElement('span');
+        span.className = `flex-1 text-sm leading-snug transition-all ${
+          task.completed ? 'line-through text-stone-300' : 'text-stone-700'
+        }`;
+        span.textContent = task.text;
+
+        // 削除ボタン
+        const del = document.createElement('button');
+        del.setAttribute('aria-label', 'タスクを削除');
+        del.className = 'flex-shrink-0 text-stone-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all active:scale-90';
+        del.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd"/></svg>`;
+        del.onclick = () => removeTask(task.id);
+
+        row.appendChild(check);
+        row.appendChild(span);
+        row.appendChild(del);
+        taskList.appendChild(row);
+      });
+    }
+
+    updateSubtitle();
+    updateFilterButtons();
+  }
+
+  function addTask() {
+    const text = input.value.trim();
+    if (!text) return;
+    tasks.unshift({ id: crypto.randomUUID(), text, completed: false, createdAt: Date.now() });
+    save(); render();
+    input.value = '';
+    input.focus();
+  }
+
+  function toggle(id) {
+    tasks = tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+    save(); render();
+  }
+
+  function removeTask(id) {
+    const el = document.getElementById(`task-${id}`);
+    if (el) {
+      el.classList.remove('task-enter');
+      el.classList.add('task-exit');
+      setTimeout(() => {
+        tasks = tasks.filter(t => t.id !== id);
+        save(); render();
+      }, 200);
+    }
+  }
+
+  clearBtn.onclick = () => {
+    const ids = tasks.filter(t => t.completed).map(t => t.id);
+    ids.forEach(id => {
+      const el = document.getElementById(`task-${id}`);
+      if (el) { el.classList.remove('task-enter'); el.classList.add('task-exit'); }
+    });
+    setTimeout(() => {
+      tasks = tasks.filter(t => !t.completed);
+      save(); render();
+    }, 200);
+  };
+
+  addBtn.onclick = addTask;
+  input.addEventListener('keydown', e => e.key === 'Enter' && addTask());
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.onclick = () => { filter = btn.dataset.f; render(); };
+  });
+
+  // 追加ボタンのdisabled制御
+  input.addEventListener('input', () => { addBtn.disabled = !input.value.trim(); });
+  addBtn.disabled = true;
+
+  render();
+</script>
+</body>
+</html>
