@@ -1,255 +1,477 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-
-type Task = {
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: number;
-};
-
-type Filter = "all" | "active" | "completed";
-
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className="w-3.5 h-3.5"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className="w-4 h-4"
-    >
-      <path
-        fillRule="evenodd"
-        d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
+import { useState } from "react";
 
 export default function Home() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [input, setInput] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [tab, setTab] = useState<"points" | "amount">("points");
 
-  // localStorage からタスクを復元
-  useEffect(() => {
-    const stored = localStorage.getItem("todo-tasks");
-    if (stored) {
-      try {
-        setTasks(JSON.parse(stored));
-      } catch {
-        // ignore
+  // ポイント計算
+  const [currentPoints, setCurrentPoints] = useState("");
+  const [targetPoints, setTargetPoints] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [workDays, setWorkDays] = useState("");
+
+  // 金額計算
+  const [targetAmount, setTargetAmount] = useState("");
+  const [multiplier, setMultiplier] = useState("");
+  const [amountCurrentPoints, setAmountCurrentPoints] = useState("");
+
+  // ── ポイント計算ロジック ──
+  const current = parseFloat(currentPoints) || 0;
+  const target = parseFloat(targetPoints) || 0;
+  const remaining = target > 0 ? Math.max(0, target - current) : 0;
+  const progress = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+  const isGoalReached = target > 0 && current >= target;
+  const hasTarget = target > 0;
+
+  let dailyPoints: number | null = null;
+  let daysCount: number | null = null;
+  let calcMode: "manual" | "deadline" | "month" | null = null;
+
+  if (hasTarget && !isGoalReached) {
+    const parsedWorkDays = parseFloat(workDays);
+    if (workDays && parsedWorkDays > 0) {
+      daysCount = parsedWorkDays;
+      dailyPoints = remaining / daysCount;
+      calcMode = "manual";
+    } else if (deadline) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const deadlineDate = new Date(deadline + "T00:00:00");
+      deadlineDate.setHours(0, 0, 0, 0);
+      const diff =
+        Math.floor(
+          (deadlineDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+        ) + 1;
+      if (diff > 0) {
+        daysCount = diff;
+        dailyPoints = remaining / daysCount;
+        calcMode = "deadline";
       }
+    } else {
+      const today = new Date();
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const diff = lastDay.getDate() - today.getDate() + 1;
+      daysCount = diff;
+      dailyPoints = remaining / daysCount;
+      calcMode = "month";
     }
-  }, []);
+  }
 
-  // タスクが変わるたびに保存
-  useEffect(() => {
-    localStorage.setItem("todo-tasks", JSON.stringify(tasks));
-  }, [tasks]);
+  // ── 金額計算ロジック ──
+  const amount = parseFloat(targetAmount) || 0;
+  const multi = parseFloat(multiplier) || 0;
+  const amountCurrent = parseFloat(amountCurrentPoints) || 0;
+  const hasAmountCalc = amount > 0 && multi > 0;
+  const neededPoints = hasAmountCalc ? amount / multi : 0;
+  const remainingForAmount = hasAmountCalc ? Math.max(0, neededPoints - amountCurrent) : 0;
+  const amountProgress = hasAmountCalc ? Math.min(100, (amountCurrent / neededPoints) * 100) : 0;
+  const isAmountGoalReached = hasAmountCalc && amountCurrent >= neededPoints;
 
-  const addTask = () => {
-    const text = input.trim();
-    if (!text) return;
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      text,
-      completed: false,
-      createdAt: Date.now(),
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    setInput("");
-    inputRef.current?.focus();
-  };
-
-  const toggleTask = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
-    );
-  };
-
-  const removeTask = (id: string) => {
-    setRemovingIds((prev) => new Set(prev).add(id));
-    setTimeout(() => {
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-      setRemovingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }, 200);
-  };
-
-  const clearCompleted = () => {
-    const completedIds = tasks.filter((t) => t.completed).map((t) => t.id);
-    completedIds.forEach((id) => {
-      setRemovingIds((prev) => new Set(prev).add(id));
-    });
-    setTimeout(() => {
-      setTasks((prev) => prev.filter((t) => !t.completed));
-      setRemovingIds(new Set());
-    }, 200);
-  };
-
-  const filteredTasks = tasks.filter((t) => {
-    if (filter === "active") return !t.completed;
-    if (filter === "completed") return t.completed;
-    return true;
+  const todayDisplay = new Date().toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
   });
 
-  const activeCount = tasks.filter((t) => !t.completed).length;
-  const completedCount = tasks.filter((t) => t.completed).length;
-
-  const filterLabels: { key: Filter; label: string }[] = [
-    { key: "all", label: "すべて" },
-    { key: "active", label: "未完了" },
-    { key: "completed", label: "完了済み" },
-  ];
+  const minDate = new Date().toISOString().split("T")[0];
 
   return (
-    <main className="min-h-screen flex items-start justify-center pt-16 pb-24 px-4">
-      <div className="w-full max-w-lg">
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="fixed inset-0 bg-gradient-to-br from-rose-100 via-fuchsia-50 to-violet-100" />
+      <div className="fixed top-[-15%] left-[-10%] w-[65vw] max-w-[550px] aspect-square rounded-full bg-pink-300/50 blur-[90px] pointer-events-none" />
+      <div className="fixed bottom-[-15%] right-[-10%] w-[55vw] max-w-[480px] aspect-square rounded-full bg-violet-300/45 blur-[90px] pointer-events-none" />
+      <div className="fixed top-[35%] right-[5%] w-[40vw] max-w-[360px] aspect-square rounded-full bg-fuchsia-200/60 blur-[70px] pointer-events-none" />
+      <div className="fixed top-[10%] left-[55%] w-[30vw] max-w-[280px] aspect-square rounded-full bg-rose-200/50 blur-[60px] pointer-events-none" />
+      <div className="fixed bottom-[10%] left-[5%] w-[35vw] max-w-[300px] aspect-square rounded-full bg-sky-200/40 blur-[70px] pointer-events-none" />
+
+      <main className="relative z-10 min-h-screen flex flex-col items-center py-10 sm:py-14 px-4 sm:px-6">
         {/* ヘッダー */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-stone-800">
-            タスク
+        <div className="text-center mb-8 sm:mb-10 w-full max-w-lg">
+          <p className="text-fuchsia-400 text-sm mb-2 font-medium tracking-wide">
+            {todayDisplay}
+          </p>
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-gradient-to-r from-fuchsia-500 via-pink-500 to-rose-400 bg-clip-text text-transparent">
+            ポイント計算機
           </h1>
-          <p className="mt-1 text-sm text-stone-400">
-            {activeCount > 0
-              ? `${activeCount} 件残っています`
-              : tasks.length > 0
-              ? "すべて完了しました！"
-              : "タスクを追加してみましょう"}
+          <p className="mt-3 text-slate-500 text-sm sm:text-base">
+            目標達成に必要なポイントを確認しましょう ✨
           </p>
         </div>
 
-        {/* 入力フォーム */}
-        <div className="flex gap-2 mb-6">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && addTask()}
-            placeholder="新しいタスクを入力..."
-            className="flex-1 px-4 py-3 rounded-xl bg-white border border-stone-200 text-stone-800 placeholder:text-stone-300 text-sm outline-none focus:border-stone-400 focus:ring-2 focus:ring-stone-200 transition-all"
-          />
-          <button
-            onClick={addTask}
-            disabled={!input.trim()}
-            className="px-5 py-3 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
-          >
-            追加
-          </button>
-        </div>
-
-        {/* フィルター */}
-        {tasks.length > 0 && (
-          <div className="flex gap-1 mb-4 p-1 bg-stone-100 rounded-xl">
-            {filterLabels.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  filter === key
-                    ? "bg-white text-stone-800 shadow-sm"
-                    : "text-stone-400 hover:text-stone-600"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* タスクリスト */}
-        <div className="space-y-2">
-          {filteredTasks.length === 0 && (
-            <div className="text-center py-12 text-stone-300 text-sm">
-              {filter === "completed"
-                ? "完了済みのタスクはありません"
-                : filter === "active"
-                ? "未完了のタスクはありません"
-                : "タスクはありません"}
-            </div>
-          )}
-
-          {filteredTasks.map((task) => (
-            <div
-              key={task.id}
-              className={`group flex items-center gap-3 px-4 py-3.5 bg-white rounded-xl border border-stone-100 shadow-sm transition-all ${
-                removingIds.has(task.id) ? "task-exit" : "task-enter"
+        <div className="w-full max-w-lg">
+          {/* ── タブ ── */}
+          <div className="flex bg-white/60 backdrop-blur-xl border border-white/80 rounded-2xl p-1 mb-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+            <button
+              onClick={() => setTab("points")}
+              className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                tab === "points"
+                  ? "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-[0_4px_12px_rgba(236,72,153,0.35)]"
+                  : "text-slate-400 hover:text-slate-600"
               }`}
             >
-              {/* チェックボックス */}
-              <button
-                onClick={() => toggleTask(task.id)}
-                aria-label={task.completed ? "未完了に戻す" : "完了にする"}
-                className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                  task.completed
-                    ? "bg-emerald-500 border-emerald-500 text-white"
-                    : "border-stone-200 hover:border-stone-400"
-                }`}
-              >
-                {task.completed && <CheckIcon />}
-              </button>
-
-              {/* タスクテキスト */}
-              <span
-                className={`flex-1 text-sm leading-snug transition-all ${
-                  task.completed
-                    ? "line-through text-stone-300"
-                    : "text-stone-700"
-                }`}
-              >
-                {task.text}
-              </span>
-
-              {/* 削除ボタン */}
-              <button
-                onClick={() => removeTask(task.id)}
-                aria-label="タスクを削除"
-                className="flex-shrink-0 text-stone-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all active:scale-90"
-              >
-                <TrashIcon />
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* フッター：完了済みをまとめて削除 */}
-        {completedCount > 0 && (
-          <div className="mt-6 flex justify-end">
+              🎯 ポイント計算
+            </button>
             <button
-              onClick={clearCompleted}
-              className="text-xs text-stone-300 hover:text-red-400 transition-colors"
+              onClick={() => setTab("amount")}
+              className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+                tab === "amount"
+                  ? "bg-gradient-to-r from-amber-400 to-orange-400 text-white shadow-[0_4px_12px_rgba(251,191,36,0.4)]"
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
             >
-              完了済み {completedCount} 件を削除
+              💰 金額から計算
             </button>
           </div>
-        )}
-      </div>
-    </main>
+
+          <div className="space-y-4">
+            {/* ════ ポイント計算タブ ════ */}
+            {tab === "points" && (
+              <>
+                {/* ポイント入力カード */}
+                <div className="bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_8px_32px_rgba(236,72,153,0.1),0_2px_8px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                  <h2 className="text-fuchsia-400 text-xs font-bold uppercase tracking-[0.18em] mb-5">
+                    ポイントを入力
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-slate-500 text-sm font-medium block mb-2">
+                        現在のポイント
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={currentPoints}
+                          onChange={(e) => setCurrentPoints(e.target.value)}
+                          placeholder="0"
+                          min="0"
+                          className="w-full bg-white/80 border border-rose-200/70 focus:border-fuchsia-400 focus:ring-2 focus:ring-fuchsia-200/60 rounded-2xl px-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all pr-16"
+                        />
+                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                          pt
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-slate-500 text-sm font-medium block mb-2">
+                        目標ポイント
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={targetPoints}
+                          onChange={(e) => setTargetPoints(e.target.value)}
+                          placeholder="0"
+                          min="0"
+                          className="w-full bg-white/80 border border-rose-200/70 focus:border-fuchsia-400 focus:ring-2 focus:ring-fuchsia-200/60 rounded-2xl px-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all pr-16"
+                        />
+                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                          pt
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {hasTarget && (
+                    <div className="mt-6">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-slate-500 font-medium">達成率</span>
+                        <span className="text-fuchsia-500 font-bold tabular-nums">
+                          {progress.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2.5 bg-rose-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-pink-400 via-fuchsia-400 to-violet-400 transition-all duration-700 ease-out"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 残りポイント結果 */}
+                {hasTarget && (
+                  <div
+                    className={`backdrop-blur-2xl border rounded-3xl p-7 sm:p-9 text-center transition-all duration-500 ${
+                      isGoalReached
+                        ? "bg-emerald-50/80 border-emerald-200 shadow-[0_8px_32px_rgba(52,211,153,0.2)]"
+                        : "bg-white/65 border-white/90 shadow-[0_8px_32px_rgba(236,72,153,0.12),0_2px_8px_rgba(0,0,0,0.06)]"
+                    }`}
+                  >
+                    {isGoalReached ? (
+                      <div>
+                        <div className="text-5xl mb-3">🎉</div>
+                        <p className="text-emerald-600 text-2xl font-bold">目標達成！</p>
+                        <p className="text-emerald-500 text-sm mt-2">おめでとうございます！</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.18em] mb-4">
+                          残り必要ポイント
+                        </p>
+                        <div className="flex items-end justify-center gap-2">
+                          <span
+                            className="font-bold tracking-tight leading-none tabular-nums bg-gradient-to-br from-fuchsia-500 to-rose-400 bg-clip-text text-transparent"
+                            style={{ fontSize: "clamp(3rem, 15vw, 5.5rem)" }}
+                          >
+                            {remaining.toLocaleString()}
+                          </span>
+                          <span className="text-slate-400 text-2xl font-semibold pb-1.5">pt</span>
+                        </div>
+                        <p className="text-slate-400 text-sm mt-4 tabular-nums">
+                          {current.toLocaleString()} pt /{" "}
+                          <span className="text-slate-500 font-semibold">
+                            {target.toLocaleString()} pt
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 稼働スケジュール */}
+                {hasTarget && !isGoalReached && (
+                  <div className="bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_8px_32px_rgba(139,92,246,0.1),0_2px_8px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-5">
+                      <h2 className="text-violet-400 text-xs font-bold uppercase tracking-[0.18em]">
+                        稼働スケジュール
+                      </h2>
+                      <span className="text-slate-400 text-xs">— 省略可</span>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-slate-500 text-sm font-medium block mb-1">
+                          目標達成日
+                        </label>
+                        <p className="text-slate-400 text-xs mb-2">
+                          未入力の場合は今月末で計算します
+                        </p>
+                        <input
+                          type="date"
+                          value={deadline}
+                          onChange={(e) => setDeadline(e.target.value)}
+                          min={minDate}
+                          className="w-full bg-white/80 border border-violet-200/70 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/60 rounded-2xl px-5 py-4 text-slate-700 text-base outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 text-sm font-medium block mb-1">
+                          出勤可能日数
+                        </label>
+                        <p className="text-slate-400 text-xs mb-2">
+                          未入力の場合は毎日稼働として計算します
+                        </p>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={workDays}
+                            onChange={(e) => setWorkDays(e.target.value)}
+                            placeholder="0"
+                            min="1"
+                            className="w-full bg-white/80 border border-violet-200/70 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/60 rounded-2xl px-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all pr-16"
+                          />
+                          <span className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                            日
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 1日あたりポイント */}
+                {hasTarget && !isGoalReached && dailyPoints !== null && daysCount !== null && (
+                  <div className="bg-white/65 backdrop-blur-2xl border border-violet-200/60 shadow-[0_8px_32px_rgba(139,92,246,0.15),0_2px_8px_rgba(0,0,0,0.06)] rounded-3xl p-7 sm:p-9 text-center">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.18em] mb-4">
+                      1日あたり必要ポイント
+                    </p>
+                    <div className="flex items-end justify-center gap-2">
+                      <span
+                        className="font-bold tracking-tight leading-none tabular-nums bg-gradient-to-br from-violet-500 to-fuchsia-500 bg-clip-text text-transparent"
+                        style={{ fontSize: "clamp(3rem, 15vw, 5.5rem)" }}
+                      >
+                        {Math.ceil(dailyPoints).toLocaleString()}
+                      </span>
+                      <span className="text-slate-400 text-xl font-semibold pb-1.5">pt/日</span>
+                    </div>
+                    <div className="mt-5 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-violet-200/50" />
+                      <p className="text-slate-500 text-xs whitespace-nowrap font-medium">
+                        {calcMode === "manual"
+                          ? `出勤日数 ${daysCount}日で計算`
+                          : calcMode === "deadline"
+                          ? `今日〜目標日 ${daysCount}日で計算`
+                          : `今月残り ${daysCount}日で計算`}
+                      </p>
+                      <div className="h-px flex-1 bg-violet-200/50" />
+                    </div>
+                    {dailyPoints !== Math.ceil(dailyPoints) && (
+                      <p className="text-slate-400 text-xs mt-3">
+                        ※ 切り上げ表示（正確には {dailyPoints.toFixed(1)} pt/日）
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ════ 金額計算タブ ════ */}
+            {tab === "amount" && (
+              <>
+                {/* 金額入力カード */}
+                <div className="bg-white/70 backdrop-blur-2xl border border-white/90 shadow-[0_8px_32px_rgba(251,191,36,0.12),0_2px_8px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                  <h2 className="text-amber-500 text-xs font-bold uppercase tracking-[0.18em] mb-1">
+                    金額・ポイント変換
+                  </h2>
+                  <p className="text-slate-400 text-xs mb-5">
+                    例）500pt × 掛け率 = 目標金額
+                  </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-slate-500 text-sm font-medium block mb-2">
+                        目標金額
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                          ¥
+                        </span>
+                        <input
+                          type="number"
+                          value={targetAmount}
+                          onChange={(e) => setTargetAmount(e.target.value)}
+                          placeholder="0"
+                          min="0"
+                          className="w-full bg-white/80 border border-amber-200/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 rounded-2xl pl-10 pr-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-slate-500 text-sm font-medium block mb-1">
+                        掛け率
+                      </label>
+                      <p className="text-amber-400 text-xs mb-2">
+                        ※ スタッフに確認してください
+                      </p>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={multiplier}
+                          onChange={(e) => setMultiplier(e.target.value)}
+                          placeholder="0"
+                          min="0"
+                          className="w-full bg-white/80 border border-amber-200/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 rounded-2xl px-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all pr-16"
+                        />
+                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                          倍
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-slate-500 text-sm font-medium block mb-2">
+                        現在のポイント
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={amountCurrentPoints}
+                          onChange={(e) => setAmountCurrentPoints(e.target.value)}
+                          placeholder="0"
+                          min="0"
+                          className="w-full bg-white/80 border border-amber-200/70 focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60 rounded-2xl px-5 py-4 text-slate-700 text-2xl font-bold placeholder:text-slate-300 outline-none transition-all pr-16"
+                        />
+                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold select-none">
+                          pt
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {hasAmountCalc && (
+                    <div className="mt-6">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-slate-500 font-medium">達成率</span>
+                        <span className="text-amber-500 font-bold tabular-nums">
+                          {amountProgress.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2.5 bg-amber-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-orange-400 transition-all duration-700 ease-out"
+                          style={{ width: `${amountProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 金額計算結果 */}
+                {hasAmountCalc && (
+                  <div
+                    className={`backdrop-blur-2xl border rounded-3xl p-7 sm:p-9 text-center transition-all duration-500 ${
+                      isAmountGoalReached
+                        ? "bg-emerald-50/80 border-emerald-200 shadow-[0_8px_32px_rgba(52,211,153,0.2)]"
+                        : "bg-white/65 border-amber-200/60 shadow-[0_8px_32px_rgba(251,191,36,0.18),0_2px_8px_rgba(0,0,0,0.06)]"
+                    }`}
+                  >
+                    {isAmountGoalReached ? (
+                      <div>
+                        <div className="text-5xl mb-3">🎉</div>
+                        <p className="text-emerald-600 text-2xl font-bold">目標達成！</p>
+                        <p className="text-emerald-500 text-sm mt-2">おめでとうございます！</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.18em] mb-1">
+                          必要合計ポイント
+                        </p>
+                        <p className="text-amber-400 text-xs mb-3 tabular-nums">
+                          ¥{amount.toLocaleString()} ÷ {multi} 倍
+                        </p>
+                        <div className="flex items-end justify-center gap-2 mb-6">
+                          <span
+                            className="font-bold tracking-tight leading-none tabular-nums bg-gradient-to-br from-yellow-500 to-amber-500 bg-clip-text text-transparent"
+                            style={{ fontSize: "clamp(2.5rem, 12vw, 4.5rem)" }}
+                          >
+                            {Math.ceil(neededPoints).toLocaleString()}
+                          </span>
+                          <span className="text-slate-400 text-xl font-semibold pb-1.5">pt</span>
+                        </div>
+                        <div className="border-t border-amber-100 pt-5">
+                          <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.18em] mb-4">
+                            残り必要ポイント
+                          </p>
+                          <div className="flex items-end justify-center gap-2">
+                            <span
+                              className="font-bold tracking-tight leading-none tabular-nums bg-gradient-to-br from-amber-500 to-orange-400 bg-clip-text text-transparent"
+                              style={{ fontSize: "clamp(3rem, 15vw, 5.5rem)" }}
+                            >
+                              {Math.ceil(remainingForAmount).toLocaleString()}
+                            </span>
+                            <span className="text-slate-400 text-2xl font-semibold pb-1.5">pt</span>
+                          </div>
+                          <p className="text-slate-400 text-sm mt-4 tabular-nums">
+                            {amountCurrent.toLocaleString()} pt /{" "}
+                            <span className="text-slate-500 font-semibold">
+                              {Math.ceil(neededPoints).toLocaleString()} pt
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* フッター */}
+            <p className="text-center text-slate-400 text-xs py-4">
+              ポイント計算機 — みつばちライブ 🐝
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

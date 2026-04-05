@@ -8,8 +8,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "ToDo",
-  description: "シンプルなタスク管理アプリ",
+  title: "ポイント計算機",
+  description: "目標達成に必要なポイントを計算します",
 };
 
 export default function RootLayout({

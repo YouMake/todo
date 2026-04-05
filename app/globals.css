@@ -2,46 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #f8f7f4;
-  --foreground: #1a1a2e;
-}
-
 body {
-  background-color: var(--background);
-  color: var(--foreground);
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer utilities {
-  .task-enter {
-    animation: taskEnter 0.25s ease-out;
-  }
+/* number スピナー非表示 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
 
-  @keyframes taskEnter {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .task-exit {
-    animation: taskExit 0.2s ease-in forwards;
-  }
-
-  @keyframes taskExit {
-    from {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(16px);
-    }
-  }
+/* date ピッカーアイコン */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.8;
 }
