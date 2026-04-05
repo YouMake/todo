@@ -2,6 +2,27 @@
 
 import { useState } from "react";
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className={`w-full mt-5 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
+        copied
+          ? "bg-emerald-100 text-emerald-600 border border-emerald-200"
+          : "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-[0_4px_12px_rgba(236,72,153,0.35)] hover:shadow-[0_6px_20px_rgba(236,72,153,0.45)] hover:scale-[1.02] active:scale-[0.98]"
+      }`}
+    >
+      {copied ? "✅ コピーしました！" : "📋 共有用テキストをコピー"}
+    </button>
+  );
+}
+
 export default function Home() {
   const [tab, setTab] = useState<"points" | "amount">("points");
 
@@ -312,6 +333,14 @@ export default function Home() {
                         ※ 切り上げ表示（正確には {dailyPoints.toFixed(1)} pt/日）
                       </p>
                     )}
+                    <CopyButton text={[
+                      `📊 ポイント進捗報告`,
+                      `現在のポイント：${current.toLocaleString()} pt`,
+                      `目標ポイント：${target.toLocaleString()} pt`,
+                      `残り必要ポイント：${remaining.toLocaleString()} pt（達成率 ${progress.toFixed(1)}%）`,
+                      `残り稼働予定日：${daysCount}日`,
+                      `1日の目標：${Math.ceil(dailyPoints).toLocaleString()} pt/日`,
+                    ].join("\n")} />
                   </div>
                 )}
               </>
